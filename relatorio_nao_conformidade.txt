@@ -1,8 +1,0 @@
---- RELATÓRIO DE NÃO CONFORMIDADE ---
-Relatório gerado em: 2025-11-12 09:09:04
-Dados salvos em:     2025-11-12T09:08:58.863918
-=============================================
-
-Status: OK. Nenhuma não conformidade encontrada.
-=============================================
-Fim do Relatório.
