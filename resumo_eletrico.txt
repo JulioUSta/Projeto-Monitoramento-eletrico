@@ -1,0 +1,37 @@
+--- RESUMO ELÉTRICO DA INSTALAÇÃO ---
+Resumo gerado em: 2025-11-15 22:20:08
+Dados salvos em:  2025-11-15T22:20:08.411687
+=============================================
+
+[Circuito: Circuito 1]
+  - Tensão: 220.0 V
+  - Corrente: 8.5 A
+  - Fator Potência: 0.95
+  - Frequência: 60.0 Hz
+
+[Circuito: Motor Bomba]
+  - Tensão: 220.0 V
+  - Corrente: 14.0 A
+  - Fator Potência: 0.78
+  - Frequência: 60.0 Hz
+
+[Circuito: Alimentador Principal]
+  - Tensão: 220.0 V
+  - Corrente: 25.0 A
+  - Fator Potência: 0.92
+  - Frequência: 60.0 Hz
+
+[Circuito: Banco Tomadas Sala 2]
+  - Tensão: 127.0 V
+  - Corrente: 9.5 A
+  - Fator Potência: 0.88
+  - Frequência: 60.0 Hz
+
+[Circuito: erro v=220 i=8 fp=2 f=9]
+  - Tensão: 0.0 V
+  - Corrente: 0.0 A
+  - Fator Potência: 0.0
+  - Frequência: 0.0 Hz
+
+=============================================
+Fim do Resumo.

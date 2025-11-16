@@ -1,0 +1,11 @@
+--- RELATÓRIO DE NÃO CONFORMIDADE ---
+Relatório gerado em: 2025-11-15 22:22:49
+Dados salvos em:  2025-11-15T22:22:49.894192
+=============================================
+
+Circuito com menor fator de potência: Motor Bomba - 0.78
+Circuito mais sobrecarregado: Circuito 1 - 8.5 A
+Total de circuitos fora da faixa: 0
+
+=============================================
+Fim do Relatório.

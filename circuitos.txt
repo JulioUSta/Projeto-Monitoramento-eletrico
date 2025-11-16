@@ -1,0 +1,38 @@
+--- LISTA DE CIRCUITOS MONITORADOS ---
+Arquivo gerado em: 2025-11-15 22:31:11
+=============================================
+
+[Circuito: Circuito 1]
+  - Tipo: iluminacao
+  - Tensão: 220.0 V
+  - Corrente: 8.5 A
+  - Fator de Potência: 0.95
+  - Frequência: 60.0 Hz
+  - Data da Medição: 05/11/2025
+---------------------------------------------
+[Circuito: Motor Bomba]
+  - Tipo: motor
+  - Tensão: 220.0 V
+  - Corrente: 14.0 A
+  - Fator de Potência: 0.78
+  - Frequência: 60.0 Hz
+  - Data da Medição: 05/11/2025
+---------------------------------------------
+[Circuito: Alimentador Principal]
+  - Tipo: alimentador
+  - Tensão: 220.0 V
+  - Corrente: 25.0 A
+  - Fator de Potência: 0.92
+  - Frequência: 60.0 Hz
+  - Data da Medição: 05/11/2025
+---------------------------------------------
+[Circuito: Banco Tomadas Sala 2]
+  - Tipo: tomada
+  - Tensão: 127.0 V
+  - Corrente: 9.5 A
+  - Fator de Potência: 0.88
+  - Frequência: 60.0 Hz
+  - Data da Medição: 03/11/2025
+---------------------------------------------
+
+Fim da Lista de Circuitos.
