@@ -1,0 +1,67 @@
+--- RESUMO ELÉTRICO DA INSTALAÇÃO ---
+Resumo gerado em: 2025-11-12 09:09:10
+Dados salvos em:  2025-11-12T09:08:58.863918
+=============================================
+
+[Circuito: V= 110]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: I= 20]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: V=220]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: V=110]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: V=380]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: V=240]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: I=20]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: I=15]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: I=10]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+[Circuito: I25]
+  - Tensão: N/A V
+  - Corrente: N/A A
+  - Fator Potência: N/A
+  - Frequência: N/A Hz
+
+=============================================
+Fim do Resumo.
