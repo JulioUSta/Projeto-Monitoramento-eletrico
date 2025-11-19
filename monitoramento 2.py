@@ -1,196 +1,284 @@
-from datetime import datetime
+import json
+import datetime
+import os
 
-# --- Lista inicial de circuitos ---
-circuitos = [
-    ["Circuito 1", "iluminacao", 220.0, 8.5, 0.95, 60.0, "05/11/2025"],
-    ["Motor Bomba", "motor", 220.0, 14.0, 0.78, 60.0, "05/11/2025"],
-    ["Alimentador Principal", "alimentador", 220.0, 25.0, 0.92, 60.0, "05/11/2025"],
-    ["Banco Tomadas Sala 2", "tomada", 127.0, 9.5, 0.88, 60.0, "03/11/2025"]
-]
+# --- 1. CONFIGURAÇÕES E DADOS GLOBAIS ---
 
-# --- Limites por tipo de circuito ---
-limites = {
-    "iluminacao": {"i_max": 10.0, "fp_min": 0.9, "tensao_nom": 220},
-    "motor": {"i_max": 20.0, "fp_min": 0.75, "tensao_nom": 220},
-    "tomada": {"i_max": 15.0, "fp_min": 0.8, "tensao_nom": 127},
-    "alimentador": {"i_max": 40.0, "fp_min": 0.92, "tensao_nom": 220},
+DADOS_CIRCUITOS = {}
+GLOBAL_LAST_SAVE_TIMESTAMP = "N/A (dados ainda não salvos)"
+
+# Definição dos limites
+FAIXAS_SEGURAS = {
+    "tensao": {"min": 210, "max": 230},
+    "corrente": {"min": 0, "max": 50},
+    "fator_potencia": {"min": 0.92, "max": 1.0},
+    "frequencia": {"min": 59.5, "max": 60.5},
+    "thd": {"min": 0, "max": 8.0}  # Limite de 8% para THD
 }
 
-tolerancia_tensao = 0.10  # 10%
+# Mapeamento atualizado: Mantém V, I, fp, f e ADICIONA o THD
+MAPA_PARAMETROS = {
+    "V": "tensao",
+    "I": "corrente",
+    "FP": "fator_potencia",
+    "F": "frequencia",
+    "THD": "thd"
+}
 
-# --- Funções auxiliares ---
-def dentro_da_faixa(circuito):
-    nome, tipo, v, i, fp, f, data = circuito
-    regra = limites.get(tipo, None)
-    if not regra:
-        return True
-    if not (regra["tensao_nom"] * (1 - tolerancia_tensao) <= v <= regra["tensao_nom"] * (1 + tolerancia_tensao)):
-        return False
-    if i > regra["i_max"]:
-        return False
-    if fp < regra["fp_min"]:
-        return False
-    return True
 
-def registrar_medicao(linha):
-    partes = linha.split(";")
-    nome = partes[0].strip()
-    medidas = {}
-    for pedaco in partes[1:]:
-        pedaco = pedaco.strip()
-        if "=" in pedaco:
-            kv = pedaco.split("=", 1)
-            if len(kv) == 2:
-                k, v = kv
-                medidas[k.strip().lower()] = v.strip()
+ARQUIVO_DADOS = "circuitos_data.json"
 
-    encontrado = False
-    for c in circuitos:
-        if c[0] == nome:
-            if "v" in medidas:
-                c[2] = float(medidas["v"])
-            if "i" in medidas:
-                c[3] = float(medidas["i"])
-            if "fp" in medidas:
-                c[4] = float(medidas["fp"])
-            if "f" in medidas:
-                c[5] = float(medidas["f"])
-            c[6] = datetime.now().strftime("%d/%m/%Y")
-            encontrado = True
+
+# --- 2. FUNÇÕES AUXILIARES DE PROCESSAMENTO ---
+
+def _verificar_e_registrar_thd(nome_circuito, medicoes):
+    """
+    Verifica se o THD > 8% e grava no relatório de harmônicas.
+    """
+    if 'thd' in medicoes:
+        valor_thd = medicoes['thd']
+
+        # Regra: Se THD > 8%, gera alerta
+        if valor_thd > 8.0:
+            print(f"  [ALERTA] {nome_circuito}: THD de {valor_thd}% excede limite de 8%!")
+
+            nome_arquivo_thd = "relatorio_harmonicas.txt"
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            try:
+                with open(nome_arquivo_thd, "a", encoding="utf-8") as f:
+                    f.write(f"[{timestamp}] ALERTA CRÍTICO - HARMÔNICAS\n")
+                    f.write(f"  Circuito: {nome_circuito}\n")
+                    f.write(f"  THD Medido: {valor_thd}%\n")
+                    f.write(f"  Dados Completos: {medicoes}\n")
+                    f.write("-" * 40 + "\n")
+                return True
+            except IOError as e:
+                print(f"  Erro ao gravar relatório: {e}")
+        else:
+            print(f"  [OK] {nome_circuito}: THD {valor_thd}% (Normal)")
+    return False
+
+
+def _processar_linha_medicao(linha, salvar_no_global=True):
+    """
+    Lê a linha no formato 'Nome; chave=valor; chave=valor...'
+    Aceita qualquer ordem: V, I, fp, f, THD.
+    """
+    try:
+        partes = [p.strip() for p in linha.split(';')]
+        nome_circuito = partes[0]
+        if not nome_circuito:
+            return None, None
+
+        medicoes = {}
+        for item in partes[1:]:
+            if '=' in item:
+                # Divide apenas na primeira ocorrência de '='
+                chave_raw, valor_str = item.split('=', 1)
+                chave_raw = chave_raw.strip().upper()  # normaliza para maiúsculas
+                valor_str = valor_str.strip().replace(',', '.')  # aceita vírgula decimal
+
+                chave_interna = MAPA_PARAMETROS.get(chave_raw)  # usa o mapa já existente
+
+                if chave_interna:
+                    try:
+                        medicoes[chave_interna] = float(valor_str)
+                    except ValueError:
+                        print(f"  Aviso: Valor inválido em '{item}' (esperado número, ex: 220 ou 10.5)")
+                else:
+                    print(f"  Aviso: Chave desconhecida '{chave_raw}' (use V, I, fp, f, THD)")
+
+        if salvar_no_global and medicoes:
+            if nome_circuito not in DADOS_CIRCUITOS:
+                DADOS_CIRCUITOS[nome_circuito] = {}
+            # Atualiza os dados existentes com os novos (mescla)
+            DADOS_CIRCUITOS[nome_circuito].update(medicoes)
+            print(f"  Sucesso: Dados atualizados para '{nome_circuito}'.")
+
+        return nome_circuito, medicoes
+    except Exception as e:
+        print(f"  Erro ao processar linha: {e}")
+        return None, None
+
+
+# --- 3. FUNÇÕES DO MENU ---
+
+def registrar_medicao():
+    """(Menu 1) Registro geral."""
+    print("\n--- Modo de Registro Múltiplo ---")
+    print("Formato Padrão: Nome; V=220; I=10; fp=0.95; f=60; THD=9.5")
+
+    print("Digite 'fim' para sair.")
+
+    while True:
+        linha = input("Nova Medição: ").strip()
+        if linha.lower() in ('fim', 'sair'):
+            break
+        if linha:
+            _processar_linha_medicao(linha)
+
+
+def salvar_circuitos():
+    global GLOBAL_LAST_SAVE_TIMESTAMP
+    print("\nSalvando circuitos...")
+    timestamp = datetime.datetime.now().isoformat()
+    dados = {"ultimo_salvamento": timestamp, "circuitos": DADOS_CIRCUITOS}
+    try:
+        with open(ARQUIVO_DADOS, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=4, ensure_ascii=False)
+        print(f"Salvo em '{ARQUIVO_DADOS}'.")
+        GLOBAL_LAST_SAVE_TIMESTAMP = timestamp
+    except Exception as e:
+        print(f"Erro: {e}")
+
+
+def gerar_relatorio_nao_conforme(last_save_time):
+    """(Menu 3) Relatório padrão (V, I, fp, f)."""
+    print("\nGerando relatório de não conformidade (Padrão)...")
+    lista = []
+    for nome, med in DADOS_CIRCUITOS.items():
+        for param, valor in med.items():
+            # Ignora THD aqui pois tem relatório próprio na opção 5,
+            # mas se quiser incluir tudo junto, basta remover a linha abaixo.
+            if param == 'thd': continue
+
+            faixa = FAIXAS_SEGURAS.get(param)
+            if faixa:
+                if valor < faixa["min"]:
+                    lista.append([nome, param, valor, "ABAIXO"])
+                elif valor > faixa["max"]:
+                    lista.append([nome, param, valor, "ACIMA"])
+
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open("relatorio_nao_conformidade.txt", "w", encoding="utf-8") as f:
+            f.write(f"Relatório gerado em: {timestamp}\n")
+            f.write(f"Dados baseados em:   {last_save_time}\n")
+            f.write("-" * 40 + "\n")
+            if not lista:
+                f.write("Nenhuma não conformidade nos parâmetros básicos (V, I, fp, f).\n")
+            for item in lista:
+                f.write(f"Circuito {item[0]} | {item[1]}: {item[2]} -> {item[3]}\n")
+        print(f"Relatório salvo. {len(lista)} alertas encontrados.")
+    except IOError as e:
+        print(f"Erro ao salvar: {e}")
+
+
+def resumo_eletrico(last_save_time):
+    """(Menu 4) Resumo geral."""
+    print("\nGerando resumo elétrico...")
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open("resumo_eletrico.txt", "w", encoding="utf-8") as f:
+            f.write(f"Resumo de {timestamp}\n")
+            if not DADOS_CIRCUITOS:
+                f.write("Nenhum dado registrado.\n")
+            for nome, med in DADOS_CIRCUITOS.items():
+                # monta na ordem fixa usando as abreviações originais
+                v = med.get("tensao", "N/D")
+                i = med.get("corrente", "N/D")
+                fp = med.get("fator_potencia", "N/D")
+                f_ = med.get("frequencia", "N/D")
+                thd = med.get("thd", "N/D")
+                linha = f"[V={v}, I={i}, fp={fp}, f={f_}, THD={thd}]"
+                f.write(f"{nome}: {linha}\n")
+        print("Resumo salvo em 'resumo_eletrico.txt'.")
+    except IOError as e:
+        print(f"Erro ao salvar: {e}")
+
+def analise_harmonicas():
+    """
+    (Menu 5) Análise de Harmônicas.
+    Verifica dados existentes e permite entrada mantendo formato completo (fp, f, etc).
+    """
+    print("\n" + "=" * 50)
+    print("          MÓDULO DE ANÁLISE DE HARMÔNICAS")
+    print("=" * 50)
+
+    # 1. Verificar histórico
+    print(">> 1. Verificando circuitos já carregados...")
+    count = 0
+    if DADOS_CIRCUITOS:
+        for nome, medicoes in DADOS_CIRCUITOS.items():
+            # Só verifica se tiver THD registrado
+            if 'thd' in medicoes:
+                if _verificar_e_registrar_thd(nome, medicoes):
+                    count += 1
+        if count == 0:
+            print("   Nenhum THD crítico encontrado nos dados atuais.")
+    else:
+        print("   (Memória vazia)")
+
+    print("-" * 50)
+
+    # 2. Inserir novos dados
+    print(">> 2. Inserir/Atualizar medição (Formato Completo)")
+    print("   Ex: Circuito 1; V=220; I=10; fp=0.92; f=60; THD=9.5")
+    print("   (A ordem não importa. Pressione Enter vazio para sair)")
+
+    while True:
+        linha = input("\nDados: ").strip()
+        if not linha:
             break
 
-    # Se não encontrou, cria um novo circuito
-    if not encontrado:
-        novo = [
-            nome,
-            "desconhecido",  # tipo padrão
-            float(medidas.get("v", 0)),
-            float(medidas.get("i", 0)),
-            float(medidas.get("fp", 0)),
-            float(medidas.get("f", 0)),
-            datetime.now().strftime("%d/%m/%Y")
-        ]
-        circuitos.append(novo)
+        # Processa a linha (Lê V, I, fp, f, THD...)
+        nome, medicoes = _processar_linha_medicao(linha, salvar_no_global=True)
+
+        # Se tiver THD, faz a validação específica agora
+        if nome and medicoes:
+            _verificar_e_registrar_thd(nome, medicoes)
 
 
-from datetime import datetime
+# --- 4. CARREGAMENTO E MAIN ---
 
-def salvar_circuitos(nome_arquivo="circuitos.txt"):
-    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    with open(nome_arquivo, "w") as arq:
-        arq.write("--- LISTA DE CIRCUITOS MONITORADOS ---\n")
-        arq.write(f"Arquivo gerado em: {agora}\n")
-        arq.write("=============================================\n\n")
-
-        for c in circuitos:
-            arq.write(f"[Circuito: {c[0]}]\n")
-            arq.write(f"  - Tipo: {c[1]}\n")
-            arq.write(f"  - Tensão: {c[2]} V\n")
-            arq.write(f"  - Corrente: {c[3]} A\n")
-            arq.write(f"  - Fator de Potência: {c[4]}\n")
-            arq.write(f"  - Frequência: {c[5]} Hz\n")
-            arq.write(f"  - Data da Medição: {c[6]}\n")
-            arq.write("---------------------------------------------\n")
-
-        arq.write("\nFim da Lista de Circuitos.\n")
-
-    print("Circuitos salvos em", nome_arquivo)
-
-def gerar_relatorio_nao_conforme(nome_arquivo="relatorio_nao_conforme.txt"):
-    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    dados_salvos = datetime.now().isoformat()
-
-    menor_fp = min(circuitos, key=lambda x: x[4])
-    fora = [c for c in circuitos if not dentro_da_faixa(c)]
-
-    # circuito mais sobrecarregado
-    sobrecarga = None
-    maior_razao = 0
-    for c in circuitos:
-        regra = limites.get(c[1], None)
-        if regra:
-            razao = c[3] / regra["i_max"]
-            if razao > maior_razao:
-                maior_razao = razao
-                sobrecarga = c
-
-    with open(nome_arquivo, "w") as arq:
-        arq.write("--- RELATÓRIO DE NÃO CONFORMIDADE ---\n")
-        arq.write(f"Relatório gerado em: {agora}\n")
-        arq.write(f"Dados salvos em:  {dados_salvos}\n")
-        arq.write("=============================================\n\n")
-
-        arq.write(f"Circuito com menor fator de potência: {menor_fp[0]} - {menor_fp[4]}\n")
-        if sobrecarga:
-            arq.write(f"Circuito mais sobrecarregado: {sobrecarga[0]} - {sobrecarga[3]} A\n")
-        arq.write(f"Total de circuitos fora da faixa: {len(fora)}\n")
-        if fora:
-            arq.write("Lista dos fora da faixa: " + ", ".join([c[0] for c in fora]) + "\n")
-
-        arq.write("\n=============================================\n")
-        arq.write("Fim do Relatório.\n")
-
-    print("Relatório de não conformidade salvo em", nome_arquivo)
-
-# --- Análises elétricas ---
+def carregar_dados():
+    global DADOS_CIRCUITOS, GLOBAL_LAST_SAVE_TIMESTAMP
+    try:
+        with open(ARQUIVO_DADOS, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+        if "circuitos" in dados:
+            DADOS_CIRCUITOS = dados["circuitos"]
+            GLOBAL_LAST_SAVE_TIMESTAMP = dados.get("ultimo_salvamento", "N/A")
+        else:
+            DADOS_CIRCUITOS = dados
+    except:
+        DADOS_CIRCUITOS = {}
 
 
-def resumo_eletrico(nome_arquivo="resumo_eletrico.txt"):
-    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    dados_salvos = datetime.now().isoformat()
-
-    with open(nome_arquivo, "w") as arq:
-        arq.write("--- RESUMO ELÉTRICO DA INSTALAÇÃO ---\n")
-        arq.write(f"Resumo gerado em: {agora}\n")
-        arq.write(f"Dados salvos em:  {dados_salvos}\n")
-        arq.write("=============================================\n\n")
-
-        for c in circuitos:
-            arq.write(f"[Circuito: {c[0]}]\n")
-            arq.write(f"  - Tensão: {c[2]} V\n")
-            arq.write(f"  - Corrente: {c[3]} A\n")
-            arq.write(f"  - Fator Potência: {c[4]}\n")
-            arq.write(f"  - Frequência: {c[5]} Hz\n\n")
-
-        arq.write("=============================================\n")
-        arq.write("Fim do Resumo.\n")
-
-    print("Resumo elétrico salvo em", nome_arquivo)
-
-
-# --- Módulo extra (placeholder) ---
-def modulo_extra():
-    print("Módulo extra ainda não implementado.")
-
-# --- Menu principal em loop ---
 def main():
+    carregar_dados()
     while True:
-        print("\n=== Sistema de Monitoramento Elétrico ===")
-        print("1 - Registrar medição")
-        print("2 - Salvar circuitos")
-        print("3 - Gerar relatório de não conformidade")
-        print("4 - Resumo elétrico")
-        print("5 - Rodar módulo extra")
-        print("0 - Sair")
-        opc = input("Escolha: ")
-        if opc == "1":
-            linha = input("Digite: Nome; V=...; I=...; fp=...; f=...\n")
-            registrar_medicao(linha)
-        elif opc == "2":
+        print("\n" + "=" * 30)
+        print(" SISTEMA DE MONITORAMENTO")
+        print("=" * 30)
+        print("1. Registrar Medição (Geral)")
+        print("2. Salvar Circuitos")
+        print("3. Relatório de Não Conformidade")
+        print("4. Resumo Elétrico")
+        print("5. Análise de Harmônicas (THD)")
+        print("S. Sair e Salvar")
+        print("-" * 30)
+
+        opc = input("Opção: ").lower()
+
+        if opc == '1':
+            registrar_medicao()
+        elif opc == '2':
             salvar_circuitos()
-        elif opc == "3":
-            gerar_relatorio_nao_conforme()
-        elif opc == "4":
-            resumo_eletrico()
-        elif opc == "5":
-            modulo_extra()
-        elif opc == "0":
-            print("Encerrando sistema...")
+        elif opc == '3':
+            gerar_relatorio_nao_conforme(GLOBAL_LAST_SAVE_TIMESTAMP)
+        elif opc == '4':
+            resumo_eletrico(GLOBAL_LAST_SAVE_TIMESTAMP)
+        elif opc == '5':
+            analise_harmonicas()
+        elif opc == 's':
+            salvar_circuitos()
             break
         else:
-            print("Opção inválida")
+            print("Opção inválida.")
 
-# Executa o menu
+
 if __name__ == "__main__":
     main()
+
