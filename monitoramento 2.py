@@ -2,21 +2,17 @@ import json
 import datetime
 import os
 
-# --- 1. CONFIGURAÇÕES E DADOS GLOBAIS ---
-
 DADOS_CIRCUITOS = {}
 GLOBAL_LAST_SAVE_TIMESTAMP = "N/A (dados ainda não salvos)"
 
-# Definição dos limites
 FAIXAS_SEGURAS = {
     "tensao": {"min": 210, "max": 230},
     "corrente": {"min": 0, "max": 50},
     "fator_potencia": {"min": 0.92, "max": 1.0},
     "frequencia": {"min": 59.5, "max": 60.5},
-    "thd": {"min": 0, "max": 8.0}  # Limite de 8% para THD
+    "thd": {"min": 0, "max": 8.0}
 }
 
-# Mapeamento atualizado: Mantém V, I, fp, f e ADICIONA o THD
 MAPA_PARAMETROS = {
     "V": "tensao",
     "I": "corrente",
@@ -25,11 +21,7 @@ MAPA_PARAMETROS = {
     "THD": "thd"
 }
 
-
 ARQUIVO_DADOS = "circuitos_data.json"
-
-
-# --- 2. FUNÇÕES AUXILIARES DE PROCESSAMENTO ---
 
 def _verificar_e_registrar_thd(nome_circuito, medicoes):
     """
@@ -38,7 +30,6 @@ def _verificar_e_registrar_thd(nome_circuito, medicoes):
     if 'thd' in medicoes:
         valor_thd = medicoes['thd']
 
-        # Regra: Se THD > 8%, gera alerta
         if valor_thd > 8.0:
             print(f"  [ALERTA] {nome_circuito}: THD de {valor_thd}% excede limite de 8%!")
 
@@ -59,7 +50,6 @@ def _verificar_e_registrar_thd(nome_circuito, medicoes):
             print(f"  [OK] {nome_circuito}: THD {valor_thd}% (Normal)")
     return False
 
-
 def _processar_linha_medicao(linha, salvar_no_global=True):
     """
     Lê a linha no formato 'Nome; chave=valor; chave=valor...'
@@ -74,12 +64,11 @@ def _processar_linha_medicao(linha, salvar_no_global=True):
         medicoes = {}
         for item in partes[1:]:
             if '=' in item:
-                # Divide apenas na primeira ocorrência de '='
                 chave_raw, valor_str = item.split('=', 1)
-                chave_raw = chave_raw.strip().upper()  # normaliza para maiúsculas
-                valor_str = valor_str.strip().replace(',', '.')  # aceita vírgula decimal
+                chave_raw = chave_raw.strip().upper()
+                valor_str = valor_str.strip().replace(',', '.')
 
-                chave_interna = MAPA_PARAMETROS.get(chave_raw)  # usa o mapa já existente
+                chave_interna = MAPA_PARAMETROS.get(chave_raw)
 
                 if chave_interna:
                     try:
@@ -92,7 +81,6 @@ def _processar_linha_medicao(linha, salvar_no_global=True):
         if salvar_no_global and medicoes:
             if nome_circuito not in DADOS_CIRCUITOS:
                 DADOS_CIRCUITOS[nome_circuito] = {}
-            # Atualiza os dados existentes com os novos (mescla)
             DADOS_CIRCUITOS[nome_circuito].update(medicoes)
             print(f"  Sucesso: Dados atualizados para '{nome_circuito}'.")
 
@@ -100,9 +88,6 @@ def _processar_linha_medicao(linha, salvar_no_global=True):
     except Exception as e:
         print(f"  Erro ao processar linha: {e}")
         return None, None
-
-
-# --- 3. FUNÇÕES DO MENU ---
 
 def registrar_medicao():
     """(Menu 1) Registro geral."""
@@ -118,7 +103,6 @@ def registrar_medicao():
         if linha:
             _processar_linha_medicao(linha)
 
-
 def salvar_circuitos():
     global GLOBAL_LAST_SAVE_TIMESTAMP
     print("\nSalvando circuitos...")
@@ -132,15 +116,12 @@ def salvar_circuitos():
     except Exception as e:
         print(f"Erro: {e}")
 
-
 def gerar_relatorio_nao_conforme(last_save_time):
     """(Menu 3) Relatório padrão (V, I, fp, f)."""
     print("\nGerando relatório de não conformidade (Padrão)...")
     lista = []
     for nome, med in DADOS_CIRCUITOS.items():
         for param, valor in med.items():
-            # Ignora THD aqui pois tem relatório próprio na opção 5,
-            # mas se quiser incluir tudo junto, basta remover a linha abaixo.
             if param == 'thd': continue
 
             faixa = FAIXAS_SEGURAS.get(param)
@@ -164,7 +145,6 @@ def gerar_relatorio_nao_conforme(last_save_time):
     except IOError as e:
         print(f"Erro ao salvar: {e}")
 
-
 def resumo_eletrico(last_save_time):
     """(Menu 4) Resumo geral."""
     print("\nGerando resumo elétrico...")
@@ -175,7 +155,6 @@ def resumo_eletrico(last_save_time):
             if not DADOS_CIRCUITOS:
                 f.write("Nenhum dado registrado.\n")
             for nome, med in DADOS_CIRCUITOS.items():
-                # monta na ordem fixa usando as abreviações originais
                 v = med.get("tensao", "N/D")
                 i = med.get("corrente", "N/D")
                 fp = med.get("fator_potencia", "N/D")
@@ -196,12 +175,10 @@ def analise_harmonicas():
     print("          MÓDULO DE ANÁLISE DE HARMÔNICAS")
     print("=" * 50)
 
-    # 1. Verificar histórico
     print(">> 1. Verificando circuitos já carregados...")
     count = 0
     if DADOS_CIRCUITOS:
         for nome, medicoes in DADOS_CIRCUITOS.items():
-            # Só verifica se tiver THD registrado
             if 'thd' in medicoes:
                 if _verificar_e_registrar_thd(nome, medicoes):
                     count += 1
@@ -212,7 +189,6 @@ def analise_harmonicas():
 
     print("-" * 50)
 
-    # 2. Inserir novos dados
     print(">> 2. Inserir/Atualizar medição (Formato Completo)")
     print("   Ex: Circuito 1; V=220; I=10; fp=0.92; f=60; THD=9.5")
     print("   (A ordem não importa. Pressione Enter vazio para sair)")
@@ -222,15 +198,10 @@ def analise_harmonicas():
         if not linha:
             break
 
-        # Processa a linha (Lê V, I, fp, f, THD...)
         nome, medicoes = _processar_linha_medicao(linha, salvar_no_global=True)
 
-        # Se tiver THD, faz a validação específica agora
         if nome and medicoes:
             _verificar_e_registrar_thd(nome, medicoes)
-
-
-# --- 4. CARREGAMENTO E MAIN ---
 
 def carregar_dados():
     global DADOS_CIRCUITOS, GLOBAL_LAST_SAVE_TIMESTAMP
@@ -244,7 +215,6 @@ def carregar_dados():
             DADOS_CIRCUITOS = dados
     except:
         DADOS_CIRCUITOS = {}
-
 
 def main():
     carregar_dados()
@@ -278,7 +248,5 @@ def main():
         else:
             print("Opção inválida.")
 
-
 if __name__ == "__main__":
     main()
-
