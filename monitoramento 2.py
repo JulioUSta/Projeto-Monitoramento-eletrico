@@ -102,17 +102,18 @@ def _processar_linha_medicao(linha, salvar_no_global=True):
 # --- 3. FUNÇÕES DE MENU ---
 
 def registrar_medicao():
-    """Permite registrar múltiplas medições em loop."""
-    print("\n--- Modo de Registro Múltiplo ---")
+    """Permite registrar uma única medição por vez."""
+    print("\n--- Registro de Medição ---")
     print("Formato: Nome; V=220; I=10; fp=0.95; f=60; THD=9.5")
-    print("Digite 'fim' ou 'sair' para voltar ao menu principal.")
-    while True:
-        linha = input("Nova Medição: ").strip()
-        if linha.lower() in ('fim', 'sair'):
-            print("Saindo do modo de registro.")
-            break
-        if linha:
-            _processar_linha_medicao(linha, salvar_no_global=True)
+    print("Exemplo: Circuito A1; V=220; I=15.5; fp=0.92; f=60; THD=7.2")
+
+    linha = input("Digite a medição: ").strip()
+    if linha:
+        nome_circuito, medicoes = _processar_linha_medicao(linha, salvar_no_global=True)
+        if nome_circuito and medicoes:
+            print(f"Sucesso: Dados gravados para '{nome_circuito}'.")
+    else:
+        print("Nenhuma medição registrada.")
 
 
 def salvar_circuitos():
@@ -345,5 +346,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
